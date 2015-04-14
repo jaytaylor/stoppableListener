@@ -1,5 +1,7 @@
 package stoppableListener
 
+// Many thanks to Richard Crowley for writing http://rcrowley.org/articles/golang-graceful-stop.html.
+
 import (
 	"errors"
 	"fmt"
