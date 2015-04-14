@@ -60,12 +60,15 @@ func (sl *StoppableListener) Accept() (net.Conn, error) {
 		select {
 		case <-sl.stop:
 			sl.log("StoppableListener stop channel is closed")
-			sl.TCPListener.Close()
+			if err := sl.TCPListener.Close(); err != nil {
+				sl.log("StoppableListener error closing underyling TCP listener: %s", err)
+				return nil, err
+			}
 			return nil, StoppedError
 
 		default:
 			// If the channel is still open, continue as normal.
-			sl.log("StoppableListener stop channel is open")
+			// sl.log("StoppableListener stop channel is open")
 		}
 
 		if err != nil {
