@@ -3,7 +3,7 @@ package stoppableListener
 import (
 	"errors"
 	"fmt"
-	// "log"
+	"log"
 	"net"
 	"os/exec"
 	"runtime"
@@ -16,11 +16,13 @@ type StoppableListener struct {
 	stop                 chan int // Channel used only to indicate listener should shutdown.
 	MaxStopChecks        int      // Maximum number of stop checks before StopSafely() gives up and returns an error.
 	StopCheckWaitSeconds int      // Number of seconds to wait for during each stop check.  Must be an integer gte 1, otherwise the resulting behavior is undefined.
+	Verbose              bool     // Activates verbose logging.
 }
 
 var (
-	DefaultMaxStopChecks        = 10 // Default stop check limit before error.
-	DefaultStopCheckWaitSeconds = 1  // Default number of seconds to wait for during each check.
+	DefaultMaxStopChecks        = 10    // Default stop check limit before error.
+	DefaultStopCheckWaitSeconds = 1     // Default number of seconds to wait for during each check.
+	DefaultVerbose              = false // Default value for Verbose field of new StoppableListeners.
 
 	StoppedError              = errors.New("listener stopped")
 	ListenerWrapError         = errors.New("cannot wrap listener")
@@ -41,6 +43,7 @@ func New(l net.Listener) (*StoppableListener, error) {
 		make(chan int),
 		DefaultMaxStopChecks,
 		DefaultStopCheckWaitSeconds,
+		DefaultVerbose,
 	}
 
 	return retval, nil
@@ -56,12 +59,13 @@ func (sl *StoppableListener) Accept() (net.Conn, error) {
 		// Check for the channel being closed.
 		select {
 		case <-sl.stop:
-			// log.Println("StoppableListener stop channel is closed")
+			sl.log("StoppableListener stop channel is closed")
+			sl.TCPListener.Close()
 			return nil, StoppedError
 
 		default:
 			// If the channel is still open, continue as normal.
-			// log.Println("StoppableListener stop channel is open")
+			sl.log("StoppableListener stop channel is open")
 		}
 
 		if err != nil {
@@ -103,12 +107,18 @@ func (sl *StoppableListener) waitUntilStopped() error {
 	}
 	args := append([]string{"-v", "-w", fmt.Sprint(sl.StopCheckWaitSeconds)}, strings.Split(sl.TCPListener.Addr().String(), ":")...)
 	for i := 0; i < sl.MaxStopChecks; i++ {
-		/*out*/ _, err := exec.Command("nc", args...).CombinedOutput()
+		out, err := exec.Command("nc", args...).CombinedOutput()
 		if err != nil { // If `nc` exits with non-zero status code then that means the port is closed.
 			return nil
 		}
-		/*log.Printf("waitUntilStopped nc output=%s\n", string(out))*/
+		sl.log("waitUntilStopped nc output=%s\n", string(out))
 	}
-	// log.Println("waitUntilStopped max checks exceeded, stop failed")
+	sl.log("waitUntilStopped max checks exceeded, stop failed")
 	return NotStoppedError
+}
+
+func (sl *StoppableListener) log(format string, args ...interface{}) {
+	if sl.Verbose {
+		log.Printf(format, args...)
+	}
 }
