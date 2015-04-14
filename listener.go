@@ -51,11 +51,6 @@ func New(l net.Listener) (*StoppableListener, error) {
 
 func (sl *StoppableListener) Accept() (net.Conn, error) {
 	for {
-		// Wait up to one second for a new connection.
-		sl.SetDeadline(time.Now().Add(time.Second))
-
-		newConn, err := sl.TCPListener.Accept()
-
 		// Check for the channel being closed.
 		select {
 		case <-sl.stop:
@@ -71,12 +66,14 @@ func (sl *StoppableListener) Accept() (net.Conn, error) {
 			// sl.log("StoppableListener stop channel is open")
 		}
 
-		if err != nil {
-			netErr, ok := err.(net.Error)
+		// Wait up to one second for a new connection.
+		sl.SetDeadline(time.Now().Add(time.Second))
 
+		newConn, err := sl.TCPListener.Accept()
+		if err != nil {
 			// If this is a timeout, then continue to wait for
 			// new connections.
-			if ok && netErr.Timeout() && netErr.Temporary() {
+			if netErr, ok := err.(net.Error); ok && netErr.Timeout() && netErr.Temporary() {
 				continue
 			}
 		}
