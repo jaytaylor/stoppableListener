@@ -1,32 +1,37 @@
 package stoppableListener
 
 import (
-	"fmt"
 	"net"
+	"os/exec"
 	"testing"
+	"time"
 )
 
-const port = 31337
-
 func Test_StopSafely(t *testing.T) {
-	l, err := net.Listen("tcp", "localhost:"+fmt.Sprint(port))
+	var (
+		acceptLoopDone = make(chan struct{})
+		l, err         = net.Listen("tcp", "")
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	stoppable, err := New(l)
-	stoppable.Verbose = true
 	if err != nil {
 		t.Fatal(err)
 	}
+	stoppable.Verbose = true
 
 	go func() {
+		defer func() {
+			acceptLoopDone <- struct{}{}
+		}()
 		for {
 			// Listen for an incoming connection.
 			conn, err := stoppable.Accept()
 			if err != nil {
 				if err == StoppedError {
-					t.Log("socket stopped, listener loop exiting")
+					t.Log("detected listener socket stop, accept loop exiting")
 					return
 				}
 				t.Logf("error accepting connection: %s", err)
@@ -37,7 +42,26 @@ func Test_StopSafely(t *testing.T) {
 		}
 	}()
 
+	addr := stoppable.TCPListener.Addr().String()
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		t.Fatalf("Error splitting host:port from address %q: %s", addr, err)
+	}
+
+	output, err := exec.Command("nc", "-w", "1", host, port).CombinedOutput()
+	if err != nil {
+		t.Fatalf("netcat port connect test failed: %s (output=%v)", err, string(output))
+	}
+
 	if err := stoppable.StopSafely(); err != nil {
-		t.Fatal(err)
+		t.Errorf("StopSafely error: %s", err)
+	}
+
+	timeout := 2 * time.Second
+
+	select {
+	case <-acceptLoopDone:
+	case <-time.After(timeout):
+		t.Errorf("Timed out after %s waiting for accept loop exit signal: accept loop didn't exit after the listener was stopped", timeout)
 	}
 }
