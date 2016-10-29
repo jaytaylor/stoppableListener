@@ -39,15 +39,15 @@ func New(l net.Listener) (*StoppableListener, error) {
 		return nil, ListenerWrapError
 	}
 
-	retval := &StoppableListener{
-		tcpL,
-		make(chan struct{}),
-		DefaultMaxStopChecks,
-		DefaultStopCheckWaitSeconds,
-		DefaultVerbose,
+	sl := &StoppableListener{
+		TCPListener:          tcpL,
+		stopCh:               make(chan struct{}),
+		MaxStopChecks:        DefaultMaxStopChecks,
+		StopCheckWaitSeconds: DefaultStopCheckWaitSeconds,
+		Verbose:              DefaultVerbose,
 	}
 
-	return retval, nil
+	return sl, nil
 }
 
 func (sl *StoppableListener) Accept() (net.Conn, error) {
