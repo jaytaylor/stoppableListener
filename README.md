@@ -21,6 +21,11 @@ is interrupted with `StoppedError` whenever the listener is stopped by a call to
 	}
 ```
 
+## Requirements
+
+* Go version 1.4 or newer
+* Linux, Mac OS X, or Windows
+
 ## Running the tests
 
     go test .
